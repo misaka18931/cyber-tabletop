@@ -3,8 +3,11 @@
 #include <vector>
 #include <string>
 #include <map>
+#include <random>
 #include <nlohmann/json.hpp>
 using json = nlohmann::json;
+
+struct attr;
 
 /*  */
 enum action {
@@ -14,7 +17,8 @@ enum action {
   GAME_INIT          = 0x10,
   REGISTER_PLAYER    = 0x11,
   REMOVE_PLAYER      = 0x12,
-  SETTING            = 0x13
+  SETTING            = 0x13,
+  SENT               = 0xff
 };
 
 class player;
@@ -22,25 +26,37 @@ class player;
 extern const int player_cnt_max;
 extern const int player_cnt_min;
 extern std::map<std::string, player> players;
-extern std::vector<player*> player_ord;
+extern std::vector<player*> ring;
+extern std::mt19937_64 rng;
 extern int host;
 extern int player_cnt;
 extern int curr;
 extern bool running;
 
-class attr {
 
+struct msg {
+  bool is_public;
+  action cmd;
+  player *p;
+  std::string user;
+  json content = json::object();
+  inline void load_player();
 };
+
+void to_json(json& j, const msg& p);
+
+void from_json(const json& j, msg& p);
 
 class player {
 public:
   int ord;
   std::string id;
-  attr x;
+  attr *x;
 };
 
-void senderr(player*, std::string);
-void sendmsg(player*, std::string);
+inline void sendmsg(const msg&);
+void sendpub(const std::string&);
+void sendpriv(const std::string&, const std::string&);
 
 void init_game();
 void abort_game();
@@ -51,5 +67,6 @@ void round_start();
 void round_end(int);
 void game_advance(player*, json);
 void game_interrupt(player*, json);
-/* a call to terminate_game ends the game normally */
-void terminate_game();
+/* terminate the game and announce winnet */
+void terminate_game(const player*);
+void cleanup();

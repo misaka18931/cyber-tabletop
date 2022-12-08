@@ -15,49 +15,75 @@ int curr;
 bool running;
 
 std::map<std::string, player> players;
-std::vector<player*> player_ord;
+std::vector<player*> ring;
 
-inline json getmsg(std::istream &inf) {
-  json ret;
-  inf >> ret;
-  return ret;
-}
-
-void senderr(player* p, std::string errmsg) {
-  json err = {
-    {"player", p ? p->id : ""},
-    {"status", "error"},
-    {"what", errmsg},
+void to_json(json& j, const msg& p) {
+  j = json{
+    {"public", p.is_public},
+    {"user", p.user},
+    {"action", p.cmd},
+    {"content", p.content}
   };
-  std::cout << err << std::endl;
 }
 
-void sendmsg(player* p, std::string errmsg) {
-  json err = {
-    {"player", p ? p->id : ""},
-    {"status", "ok"},
-    {"what", errmsg},
+void from_json(const json& j, msg& p) {
+  j.at("public").get_to(p.is_public);
+  j.at("user").get_to(p.user);
+  j.at("action").get_to(p.cmd);
+  j.at("content").get_to(p.content);
+}
+
+void msg::load_player() {
+  auto iter = players.find(this->user);
+  this->p = iter == players.end() ? nullptr : &iter->second;
+}
+
+inline void sendmsg(const msg& m) {
+  std::cout << json(m) << std::endl;
+}
+
+void sendpub(const std::string& s) {
+  msg m = {
+    .is_public = true,
+    .cmd = action::SENT,
+    .content = s
   };
-  std::cout << err << std::endl;
+  sendmsg(m);
 }
 
-bool round_startd_flag = false;
+void sendpriv(const std::string &u, const std::string& s) {
+  msg m = {
+    .is_public = false,
+    .cmd = action::SENT,
+    .user = u,
+    .content = s
+  };
+  sendmsg(m);
+}
+
+inline msg getmsg(std::istream &inf) {
+  json o;
+  inf >> o;
+  msg m = o.get<msg>();
+  m.load_player();
+  return m;
+}
 
 void run_game() {
   running = true;
   while (running) {
     try {
-      if (curr == host && ! round_startd_flag) {
-        round_start();
-        round_startd_flag = true;
-      }
+      round_start();
       auto msg = getmsg(std::cin);
-      switch (msg["action"].get<int>()) {
+      if (!msg.p) continue; // player not in the game cannot interact
+      switch (msg.cmd) {
         case action::GAME_INTR:
-          game_interrupt(&players[msg["player"]], msg["content"]);
+          if (msg.is_public)
+            game_interrupt(msg.p, msg.content);
           continue;
         case action::GAME_PRGS:
-          game_advance(&players[msg["player"]], msg["content"]);
+          if (msg.p->ord == curr % player_cnt)
+            game_advance(msg.p, msg.content);
           continue;
         case action::GAME_ABRT:
           abort_game();
@@ -65,45 +91,53 @@ void run_game() {
       }
       if (curr == host + player_cnt) {
         round_end(curr + 1);
-        round_startd_flag = false;
       }
-    } catch (...) {
-
+    } catch (json::exception e) {
+      std::cerr << "[in game]: json processing error: " << e.what() << '\n';
     }
   }
 }
 
+// std::mt19937_64 rng(std::chrono::steady_clock::now().time_since_epoch().count());
+std::mt19937_64 rng(114514);
+
 int main(int argc, char **argv) {
   while (true) {
-    auto msg = getmsg(std::cin);
-    if (msg["type"] == "private") {
-      continue;
-    }
     try {
-      switch (msg["action"].get<int>()) {
+      const auto msg = getmsg(std::cin);
+      if (!msg.is_public) {
+        continue;
+      }
+      switch (msg.cmd) {
         case action::GAME_INIT:
-          init_game();
-          run_game();
+          if (players.size() > player_cnt_min) {
+            init_game();
+            run_game();
+          }
+          else sendpub("insufficient players.");
+          continue;
         ;;
         case action::REGISTER_PLAYER:
           if (players.size() < player_cnt_max) {
-            players[msg["player"]] = player();
-            sendmsg(nullptr, fmt::format("{}/{} joined.", players.size(), player_cnt_max));
+            players[msg.user] = player{ .id = msg.user };
+            sendpub(fmt::format("{}/{} joined.", players.size(), player_cnt_max));
           }
-          else senderr(nullptr, "room full");
+          else sendpub("room full");
           continue;
         case action::REMOVE_PLAYER:
-          if (players.erase(msg["player"]))
-            sendmsg(nullptr, fmt::format("player \"{}\" removed.", msg["player"]));
+          if (players.erase(msg.user))
+            sendpub(fmt::format("player \"{}\" removed.", msg.user));
           else
-            senderr(nullptr, "no such player");
+            sendpub("no such player");
           continue;
         default:
-          throw;
+          throw "undefined action";
         ;;
       }
-    } catch (...) {
-      
+    } catch (json::exception e) {
+      std::cerr << "[main loop]: json processing error: " << e.what() << '\n';
+    } catch (std::string e) {
+      std::cerr << "[main loop]: " << e << '\n';
     }
   }
   return 0;
