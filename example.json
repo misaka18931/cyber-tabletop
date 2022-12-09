@@ -1,13 +1,12 @@
-{  "action": 17,  "public": true,  "user": "u11",  "content": {} }
-{  "action": 17,  "public": true,  "user": "u12",  "content": {} }
-{  "action": 17,  "public": true,  "user": "u54",  "content": {} }
-{  "action": 17,  "public": true,  "user": "u66",  "content": {} }
-{  "action": 17,  "public": true,  "user": "u10",  "content": {} }
+{  "event": "join",  "public": true,  "user": "u11",  "content": {} }
+{  "event": "join",  "public": true,  "user": "u12",  "content": {} }
+{  "event": "join",  "public": true,  "user": "u54",  "content": {} }
+{  "event": "join",  "public": true,  "user": "u66",  "content": {} }
+{  "event": "join",  "public": true,  "user": "u10",  "content": {} }
 
-{  "action": 16,  "public": true,  "user": "u03",  "content": {} }
+{  "event": "init",  "public": true,  "user": "u03",  "content": {} }
 
-{  "action": 0,  "public": true,  "user": "u54",  "content": { "cmd": "lead", "cards": "33346669XXJQK", "decl": "4" } }
-{  "action": 0,  "public": true,  "user": "u11",  "content": { "cmd": "follow", "cards": "23344578JQQKK", "decl": "4" } }
-{  "action": 1,  "public": true,  "user": "u12",  "content": { "cmd": "follow", "cards": "23344578JQQKK", "decl": "4" } }
-{  "action": 0,  "public": true,  "user": "u12",  "content": { "cmd": "lead", "cards": "12455678", "decl": "4" } }
-{  "action": 0,  "public": true,  "user": "u54",  "content": { "cmd": "follow", "cards": "JQK", "decl": "4" } }
+{  "event": "lead",  "public": true,  "user": "u54",  "content": { "cmd": "lead", "cards": "33346669XXJQK", "decl": "4" } }
+
+{  "event": "lead",  "public": false,  "user": "u54",  "content": { "cmd": "lead", "cards": "33346669XXJQK", "decl": "4" } }
+{  "event": "quest",  "public": false,  "user": "u66",  "content": { "cmd": "", "cards": "33346669XXJQK", "decl": "4" } }

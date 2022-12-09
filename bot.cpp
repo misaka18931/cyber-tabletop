@@ -1,142 +1,76 @@
-#include <algorithm>
 #include <fmt/format.h>
+
+#include <algorithm>
 #include <iostream>
-#include <string>
 #include <map>
-#include <vector>
 #include <nlohmann/json.hpp>
+#include <string>
+#include <vector>
 using json = nlohmann::json;
 
 #include "def.h"
 
-int player_cnt;
-int host;
-int curr;
-bool running;
-
-std::map<std::string, player> players;
-std::vector<player*> ring;
-
 void to_json(json& j, const msg& p) {
-  j = json{
-    {"public", p.is_public},
-    {"user", p.user},
-    {"action", p.cmd},
-    {"content", p.content}
-  };
+  j = json{{"public", p.is_public},
+           {"user", p.user},
+           {"event", p.event},
+           {"content", p.content}};
 }
 
 void from_json(const json& j, msg& p) {
   j.at("public").get_to(p.is_public);
   j.at("user").get_to(p.user);
-  j.at("action").get_to(p.cmd);
+  j.at("event").get_to(p.event);
   j.at("content").get_to(p.content);
 }
 
-void msg::load_player() {
-  auto iter = players.find(this->user);
-  this->p = iter == players.end() ? nullptr : &iter->second;
-}
-
-inline void sendmsg(const msg& m) {
-  std::cout << json(m) << std::endl;
-}
-
-void sendpub(const std::string& s) {
-  msg m = {
-    .is_public = true,
-    .cmd = action::SENT,
-    .content = s
-  };
-  sendmsg(m);
-}
-
-void sendpriv(const std::string &u, const std::string& s) {
-  msg m = {
-    .is_public = false,
-    .cmd = action::SENT,
-    .user = u,
-    .content = s
-  };
-  sendmsg(m);
-}
-
-inline msg getmsg(std::istream &inf) {
+inline msg getmsg(std::istream& inf) {
   json o;
   inf >> o;
   msg m = o.get<msg>();
-  m.load_player();
   return m;
 }
 
-void run_game() {
-  running = true;
-  while (running) {
-    try {
-      round_start();
-      auto msg = getmsg(std::cin);
-      if (!msg.p) continue; // player not in the game cannot interact
-      switch (msg.cmd) {
-        case action::GAME_INTR:
-          if (msg.is_public)
-            game_interrupt(msg.p, msg.content);
-          continue;
-        case action::GAME_PRGS:
-          if (msg.p->ord == curr % player_cnt)
-            game_advance(msg.p, msg.content);
-          continue;
-        case action::GAME_ABRT:
-          abort_game();
-          continue;
-      }
-      if (curr == host + player_cnt) {
-        round_end(curr + 1);
-      }
-    } catch (json::exception e) {
-      std::cerr << "[in game]: json processing error: " << e.what() << '\n';
-    }
-  }
+inline void sendmsg(const msg& m) { std::cout << json(m) << std::endl; }
+
+void sendpub(const std::string& s, const std::string& u) {
+  msg m = {.is_public = true, .event = "reply", .user = u, .content = s};
+  sendmsg(m);
 }
 
-// std::mt19937_64 rng(std::chrono::steady_clock::now().time_since_epoch().count());
-std::mt19937_64 rng(114514);
+void sendpriv(const std::string& u, const std::string& s) {
+  msg m = {.is_public = false, .event = "reply", .user = u, .content = s};
+  sendmsg(m);
+}
 
-int main(int argc, char **argv) {
+#ifndef DEBUG
+std::mt19937_64 rng(
+    std::chrono::steady_clock::now().time_since_epoch().count());
+#else
+std::mt19937_64 rng(114514);
+#endif
+
+int main(int argc, char** argv) {
   while (true) {
     try {
-      const auto msg = getmsg(std::cin);
-      if (!msg.is_public) {
-        continue;
-      }
-      switch (msg.cmd) {
-        case action::GAME_INIT:
-          if (players.size() > player_cnt_min) {
-            init_game();
-            run_game();
-          }
-          else sendpub("insufficient players.");
-          continue;
-        ;;
-        case action::REGISTER_PLAYER:
-          if (players.size() < player_cnt_max) {
-            players[msg.user] = player{ .id = msg.user };
-            sendpub(fmt::format("{}/{} joined.", players.size(), player_cnt_max));
-          }
-          else sendpub("room full");
-          continue;
-        case action::REMOVE_PLAYER:
-          if (players.erase(msg.user))
-            sendpub(fmt::format("player \"{}\" removed.", msg.user));
-          else
-            sendpub("no such player");
-          continue;
-        default:
-          throw "undefined action";
-        ;;
+      auto msg = getmsg(std::cin);
+      auto event = handlers.find(msg.event);
+      if (event == handlers.end())
+        throw std::string("undefined event: " + msg.event);
+      if (msg.is_public) {
+        if (event->second.first) {
+          event->second.first(msg.user, msg.content);
+        }
+      } else {
+        if (event->second.second) {
+          event->second.second(msg.user, msg.content);
+        }
       }
     } catch (json::exception e) {
       std::cerr << "[main loop]: json processing error: " << e.what() << '\n';
     } catch (std::string e) {
+      std::cerr << "[main loop]: " << e << '\n';
+    } catch (const char* const e) {
       std::cerr << "[main loop]: " << e << '\n';
     }
   }
