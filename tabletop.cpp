@@ -93,6 +93,7 @@ std::map<std::string, player> players;
 std::vector<player *> ring;
 
 int player_cnt;
+int pass_cnt;
 int host;
 int curr;
 attr last_move, pool;
@@ -110,18 +111,20 @@ inline void print_cards(const player *p) {
 }
 
 void init_round(int _host) {
-  curr = host = _host;
+  curr = host = _host % player_cnt;
   last_move = {};
   card_of_the_round = -1;
+  pass_cnt = 0;
   sendpub(fmt::format("@{} leads.", ring[host]->name));
   sendpriv(ring[host]->name, "LEAD");
 }
 
 void prompt_next() {
-  if (curr != host + player_cnt) {
+  if (pass_cnt < player_cnt - 1) {
     sendpriv(ring[curr % player_cnt]->name,
              fmt::format("FOLLOW {}", cardname[card_of_the_round]));
   } else {
+    sendpub(fmt::format("{}passes, 回合结束。牌堆{}张.", pass_cnt, pool.size));
     init_round(host);
   }
 }
@@ -130,10 +133,11 @@ void cleanup() {
   running = false;
   ring.clear();
   terminal_mode = false;
+  pass_cnt = 0;
 }
 
 void terminate_game(const player *winner) {
-  sendpub(fmt::format("@{}获胜", winner->id));
+  sendpub(fmt::format("@{}获胜", winner->name));
   cleanup();
 }
 
@@ -142,7 +146,7 @@ void abort_game(const std::string &_u, const json &req) { cleanup(); }
 void follow(const std::string &_u, const json &req) {
   if (!running || terminal_mode || curr == host) return;
   auto p = get_player(_u);
-  if (!p || p->id != curr) return;
+  if (!p || p->id != curr % player_cnt) return;
   try {
     attr _move = (req["cards"].get<std::string>());
     if (!_move.size) throw "empty move.";
@@ -155,6 +159,7 @@ void follow(const std::string &_u, const json &req) {
     print_cards(p);
     ++curr;
     sendpub(fmt::format("牌堆共{}张.", pool.size));
+    pass_cnt = 0;
     if (!p->cards.size) {
       sendpub(fmt::format("@{}跑了，现在只允许质疑", p->name));
       terminal_mode = true;
@@ -192,6 +197,7 @@ void lead(const std::string &_u, const json &req) {
     print_cards(p);
     ++curr;
     sendpub(fmt::format("牌堆共{}张.", pool.size));
+    pass_cnt = 0;
     if (!p->cards.size) {
       sendpub(fmt::format("@{} 跑了，现在只允许质疑", p->name));
       terminal_mode = true;
@@ -209,14 +215,16 @@ void lead(const std::string &_u, const json &req) {
 void pass(const std::string &_u, const json &_arg) {
   if (!running || terminal_mode || curr == host) return;
   auto p = get_player(_u);
-  if (!p || p->id != curr) return;
+  if (!p || p->id != curr % player_cnt) return;
+  last_move = {};
   sendpub(fmt::format("{} passed.", p->get_name()));
   ++curr;
+  ++pass_cnt;
   prompt_next();
 }
 
 void quest(const std::string &_u, const json &_arg) {
-  if (!running || card_of_the_round == -1) return;
+  if (!running || last_move.size == 0) return;
   auto p = get_player(_u);
   if (!p || p->id == (curr - 1) % player_cnt) return;
   player *defendent = ring[(curr - 1) % player_cnt];
@@ -227,17 +235,17 @@ void quest(const std::string &_u, const json &_arg) {
     // success
     sendpub(fmt::format("质疑成功！\n{}拿回{}张牌！", defendent->get_name(),
                         pool.size));
-    print_cards(defendent);
     defendent->cards = defendent->cards + pool;
     pool = {};
+    print_cards(defendent);
     init_round(p->id);
   } else {
     // fail
     sendpub(
         fmt::format("质疑失败！\n{}拿回{}张牌！", p->get_name(), pool.size));
-    print_cards(p);
     p->cards = p->cards + pool;
     pool = {};
+    print_cards(p);
     if (defendent->cards.size)
       init_round(curr - 1);
     else
@@ -256,6 +264,7 @@ void init(const std::string &_u, const json &_arg) {
   last_move = {};
   pool = {};
   terminal_mode = false;
+  pass_cnt = 0;
   for (auto &[id, p] : players) {
     ring.push_back(&p);
   }
@@ -294,6 +303,76 @@ void leave(const std::string &_u, const json &_arg) {
     sendpub(fmt::format("success.\n{}/{} in room.", players.size(),
                         player_cnt_max));
   }
+}
+
+inline size_t get_next_of(const std::string &s, const char c, size_t pos = 0) {
+  for (; pos < s.length(); ++pos) {
+    if (std::isspace(s[pos])) break;
+  }
+  return pos;
+}
+
+inline size_t get_next_not_of(const std::string &s, const char c, size_t pos = 0) {
+  for (; pos < s.length(); ++pos) {
+    if (!std::isspace(s[pos])) break;
+  }
+  return pos;
+}
+
+std::tuple<std::string, json> msg_parser(const std::string &m) {
+  if (m.empty() || m[0] != '/' || (m.size() >= 2 && m[1] == '/')) {
+    return {"null", m};
+  }
+  size_t pos = get_next_of(m, ' ');
+  auto cmd = m.substr(1, pos - 1);
+  std::string e, s;
+  if (pos < m.size()) {
+    pos = get_next_not_of(m, ' ', pos);
+    if (pos < m.size()) {
+      s = m.substr(pos);
+    }
+  }
+  json j;
+  size_t t, t1, t2;
+  switch (cmd[0]) {
+    case 'f':
+      e = "follow";
+      t = get_next_of(s, ' ');
+      j = json{
+        {"cards", s.substr(0, t)}
+      };
+      break;
+    case 'i':
+      e = "init";
+      break;
+    case 'j':
+      e = "join";
+      break;
+    case 'l':
+      if (cmd.size() > 4) {
+        e = "leave";
+      } else {
+        e = "lead";
+        t = get_next_of(s, ' ');
+        t1 = get_next_not_of(s, ' ', t);
+        t2 = get_next_of(s, ' ', t1);
+        j = json{
+          {"cards", s.substr(0, t)},
+          {"decl", s.substr(t1, t2-t1)}
+        };
+      }
+      break;
+    case 'p':
+      e = "pass";
+      break;
+    case 'q':
+      e = "quest";
+      break;
+    case 'a':
+      e = "abort";
+      break;
+  }
+  return {e, j};
 }
 
 const std::map<std::string, std::pair<event_handler, event_handler> > handlers{

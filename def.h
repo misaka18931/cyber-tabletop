@@ -9,6 +9,9 @@
 using json = nlohmann::json;
 
 /* RNG for the bot */
+
+const size_t MSG_MAX_LENGTH = 65536;
+
 extern std::mt19937_64 rng;
 
 typedef void (*event_handler)(const std::string &, const json &);
@@ -23,6 +26,8 @@ struct msg {
   std::string user;
   json content = json::object();
 };
+
+std::tuple<std::string, json> msg_parser(const std::string &m);
 
 void to_json(json& j, const msg& p);
 
