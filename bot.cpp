@@ -9,6 +9,7 @@
 #include <iostream>
 #include <map>
 #include <nlohmann/json.hpp>
+#include <queue>
 #include <string>
 #include <vector>
 
@@ -50,15 +51,22 @@ inline void sendmsg(const msg& m) {
 #ifdef DEBUG
     std::cerr << "message sent: " << str << "\n";
 #endif
+    str.push_back('\0');  // null separation
     if (send(conn, str.c_str(), str.length(), 0) == -1) {
       perror("send error");
     }
   }
   // TODO: message separator
-  sleep(1);
+  // sleep(1);
 }
 
 inline bool getmsg_socket(msg& m) {
+  static std::queue<msg> msg_queue;
+  if (!msg_queue.empty()) {
+    m = msg_queue.front();
+    msg_queue.pop();
+    return true;
+  }
   static char buf[MSG_MAX_LENGTH];
   int len = recv(conn, buf, MSG_MAX_LENGTH, 0);
   if (len <= 0) {
@@ -67,15 +75,24 @@ inline bool getmsg_socket(msg& m) {
 #ifdef DEBUG
   std::cerr << "received message: " << buf << "\n";
 #endif
-  try {
-    m = json::parse(buf, buf + len).get<msg>();
-  } catch (json::exception e) {
-    std::cerr << "[main loop][getmsg_socket]: json processing error: "
-              << e.what() << '\n';
-  } catch (std::string e) {
-    std::cerr << "[main loop][getmsg_socket]: " << e << '\n';
-  } catch (const char* const e) {
-    std::cerr << "[main loop][getmsg_socket]: " << e << '\n';
+  for (int i = 0, p = 0; i < len; ++i) {
+    if (!buf[i]) {
+      try {
+        if (!p) {
+          m = json::parse(buf + p, buf + i).get<msg>();
+        } else {
+          msg_queue.push(json::parse(buf + p, buf + i));
+        }
+      } catch (json::exception e) {
+        std::cerr << "[main loop][getmsg_socket]: json processing error: "
+                  << e.what() << '\n';
+      } catch (std::string e) {
+        std::cerr << "[main loop][getmsg_socket]: " << e << '\n';
+      } catch (const char* const e) {
+        std::cerr << "[main loop][getmsg_socket]: " << e << '\n';
+      }
+      p = i + 1;
+    }
   }
   memset(buf, 0, len);
   return true;
