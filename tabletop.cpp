@@ -141,7 +141,10 @@ void terminate_game(const player *winner) {
   cleanup();
 }
 
-void abort_game(const std::string &_u, const json &req) { cleanup(); }
+void abort_game(const std::string &_u, const json &req) { 
+  sendpub("aborted.");
+  cleanup();
+}
 
 void follow(const std::string &_u, const json &req) {
   if (!running || terminal_mode || curr == host) return;
@@ -259,12 +262,14 @@ void init(const std::string &_u, const json &_arg) {
     sendpub("insufficient players");
     return;
   }
+  ring.clear();
   running = true;
   player_cnt = players.size();
   last_move = {};
   pool = {};
   terminal_mode = false;
-  pass_cnt = 0;
+  pass_cnt = host = curr = 0;
+  card_of_the_round = -1;
   for (auto &[id, p] : players) {
     ring.push_back(&p);
   }
