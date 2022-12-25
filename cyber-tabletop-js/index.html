@@ -23,7 +23,7 @@
     <div class="jumbotron">
         <h1 class="display-4">Send Bot</h1>
         <br>
-        <textarea id = "message" class="form-control" placeholder="Your Message Here"></textarea>
+        <textarea id = "message_bot" class="form-control" placeholder="Your Message Here"></textarea>
         <br>
         <button id="send_bot" class="btn btn-success">Send</button>
     </div>
@@ -47,12 +47,23 @@
       $("#send_bot").click(() => {
         sendMessage({
           user: usr,
-          content: $("#message").val(),
+          content: $("#message_bot").val(),
           public: false
         });
       })
     })
-
+          $('#message').on('keyup', (e) => {
+            if (e.which === 13) {
+              $("#message").attr("disabled", "disabled");
+              sendMessage({
+                user: usr,
+                content: $("#message").val(),
+                public: true
+              });
+              $("#message").val("");
+              $("#message").removeAttr("disabled");
+            }
+          });
     function addMessage(message) {
       if (message.public) {
       $("#messages").append(`

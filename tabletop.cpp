@@ -156,7 +156,7 @@ void follow(const std::string &_u, const json &req) {
     const auto curr_cards = p->cards - _move;
     pool = pool + _move;
     last_move = _move;
-    sendpub(fmt::format("@{}打出了{}张{}.", p->get_name(), _move.size,
+    sendpub(fmt::format("{}打出了{}张{}.", p->get_name(), _move.size,
                         cardname[card_of_the_round]));
     p->cards = curr_cards;
     print_cards(p);
@@ -310,6 +310,10 @@ void leave(const std::string &_u, const json &_arg) {
   }
 }
 
+void reset(const std::string &_u, const json &_arg) {
+  exit(0);
+}
+
 inline size_t get_next_of(const std::string &s, const char c, size_t pos = 0) {
   for (; pos < s.length(); ++pos) {
     if (std::isspace(s[pos])) break;
@@ -376,6 +380,9 @@ std::tuple<std::string, json> msg_parser(const std::string &m) {
     case 'a':
       e = "abort";
       break;
+    case 'r':
+      e = "reset";
+      break;
   }
   return {e, j};
 }
@@ -389,4 +396,5 @@ const std::map<std::string, std::pair<event_handler, event_handler> > handlers{
     {"pass", {null_event_handler, &pass}},
     {"quest", {&quest, &quest}},
     {"abort", {&abort_game, null_event_handler}},
+    {"reset", {&reset, null_event_handler}}
 };

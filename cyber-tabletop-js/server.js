@@ -1,36 +1,34 @@
-var express = require('express');
-var ipc = require('node-ipc');
+var express = require('express');                           //
 var net = require('net');
 
-var app = express();
+var app = express();                                        //
 
-var server = app.listen(3333, () => {
-  
-})
+var server = app.listen(3333, () => {                       //
+})                                                          //
 
-var bodyParser = require('body-parser')
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({extended: false}))
+var bodyParser = require('body-parser')                     //
+app.use(bodyParser.json());                                 //
+app.use(bodyParser.urlencoded({extended: false}))           //
 
-var io = require('socket.io')(server);
+var io = require('socket.io')(server);                
 
 console.log("running on port", server.address().port);
-app.use(express.static(__dirname));
+app.use(express.static(__dirname)); 
 
-users = new Map();
+users = new Map();    
 
-app.get('/msg', (req, res) => {
-  var user = req.params.user
-})
+app.get('/msg', (req, res) => {   
+  var user = req.params.user    
+})      
 
 /////////////////// IPC /////////////////////////
 
 
 
-const bot  = net.Socket();
-bot.connect('/tmp/conn');
-bot.on('error', (e) => {
-  console.error('socket error occured!');
+const bot  = net.Socket();    
+bot.connect('/tmp/conn');   
+bot.on('error', (e) => {    
+  console.error('socket error occured!');   
   console.error(e);
 });
 bot.on('close', (hasErr) => {
@@ -45,7 +43,7 @@ bot.on('connect', () => {
 })
 
 //////////////////////////////////////////////////
-console.log('reached here');
+// console.log('reached here');
 bot.on('data', (mstr) => {
   m = JSON.parse(mstr);
   if (m.public) {

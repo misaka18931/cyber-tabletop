@@ -77,6 +77,12 @@
     "typeindex": "cpp",
     "typeinfo": "cpp",
     "valarray": "cpp",
-    "variant": "cpp"
+    "variant": "cpp",
+    "csignal": "cpp",
+    "*.ipp": "cpp",
+    "strstream": "cpp",
+    "coroutine": "cpp",
+    "regex": "cpp",
+    "future": "cpp"
   }
 }
